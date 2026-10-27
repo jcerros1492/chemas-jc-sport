@@ -1,0 +1,33 @@
+{
+  "name": "Chemas JC Sport - Control del negocio",
+  "short_name": "Chemas JC Sport",
+  "description": "Inventario, ventas, clientes y abonos",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101827",
+  "theme_color": "#101827",
+  "icons": [
+    {
+      "src": "icon-192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "./",
+  "lang": "es",
+  "orientation": "portrait"
+}
