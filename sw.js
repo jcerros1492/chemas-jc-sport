@@ -1,4 +1,4 @@
-const CACHE = 'chemas-jc-sport-v9-21';
+const CACHE = 'chemas-jc-sport-v9-22';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.json', './logo.png', './apple-touch-icon-v2.png', './icon-192-v2.png', './icon-512-v2.png', './icon-maskable-512-v2.png', './html2canvas.min.js', './jspdf.umd.min.js'];
 self.addEventListener('install', event => { self.skipWaiting(); event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).catch(() => {})); });
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
