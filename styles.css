@@ -80,3 +80,6 @@ footer .link-btn{display:block;margin:8px auto 0;background:none;border:0;color:
 .modal{max-height:calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .modal-head{position:sticky;top:0;z-index:3;background:#fff;border-radius:15px 15px 0 0}
 .modal-actions{position:sticky;bottom:0;z-index:3;background:#fff;border-radius:0 0 15px 15px}
+
+/* iPhone: la barra de arriba crece según la zona de la cámara, para que el logo no se corte ni se monte sobre el título */
+.topbar{height:auto;min-height:66px;padding-top:calc(10px + env(safe-area-inset-top));padding-bottom:10px}
