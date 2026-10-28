@@ -90,3 +90,7 @@ footer .link-btn{display:block;margin:8px auto 0;background:none;border:0;color:
   .connection{order:9;flex:0 0 100%;margin-left:0;justify-content:flex-start;font-size:12px}
   .connection span{display:inline}
 }
+
+.hist-item{border-top:1px solid #e5e7eb;padding-top:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.hist-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.hist-item .payment-history-line{font-size:13px}
