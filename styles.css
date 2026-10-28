@@ -74,3 +74,9 @@ button[hidden]{display:none!important}
 footer .link-btn{display:block;margin:8px auto 0;background:none;border:0;color:#0e9f6e;font:600 12px Inter,Arial,sans-serif;letter-spacing:0;text-decoration:underline;padding:6px}
 #updBanner{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:10000;background:#101827;color:#fff;border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center;justify-content:space-between;box-shadow:0 10px 30px rgba(0,0,0,.3);font-size:14px}
 #updBanner button{background:#0e9f6e;color:#fff;border:0;border-radius:10px;padding:9px 14px;font-weight:700;flex:none}
+
+/* iPhone: que el botón X y los botones de abajo siempre se alcancen (zona de la cámara y barra inferior) */
+.modal-backdrop{padding:calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom))}
+.modal{max-height:calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.modal-head{position:sticky;top:0;z-index:3;background:#fff;border-radius:15px 15px 0 0}
+.modal-actions{position:sticky;bottom:0;z-index:3;background:#fff;border-radius:0 0 15px 15px}
