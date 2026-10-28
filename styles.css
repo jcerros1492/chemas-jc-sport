@@ -83,3 +83,10 @@ footer .link-btn{display:block;margin:8px auto 0;background:none;border:0;color:
 
 /* iPhone: la barra de arriba crece según la zona de la cámara, para que el logo no se corte ni se monte sobre el título */
 .topbar{height:auto;min-height:66px;padding-top:calc(10px + env(safe-area-inset-top));padding-bottom:10px}
+
+/* Celular: mostrar el estado y la hora de sincronización debajo del logo, sin girar el teléfono */
+@media(max-width:540px){
+  .topbar{flex-wrap:wrap;row-gap:6px}
+  .connection{order:9;flex:0 0 100%;margin-left:0;justify-content:flex-start;font-size:12px}
+  .connection span{display:inline}
+}
