@@ -370,7 +370,7 @@ const PERS_RE=/\n?\[\[JC:(\{.*?\})\]\]\s*$/s;
 function ordPers(o){const m=PERS_RE.exec(String(o&&o.notes||''));if(!m)return {on:false,name:'',patch:'',sent:0};try{const j=JSON.parse(m[1]);return {on:true,name:String(j.n||''),patch:String(j.p||''),sent:Number(j.s)||0};}catch(e){return {on:false,name:'',patch:'',sent:0};}}
 function ordNotes(o){return String(o&&o.notes||'').replace(PERS_RE,'').trim();}
 function packNotes(text,pers){const t=String(text||'').trim();if(!pers||!pers.on)return t;return (t?t+'\n':'')+'[[JC:'+JSON.stringify(pers.sent?{n:pers.name||'',p:pers.patch||'',s:pers.sent}:{n:pers.name||'',p:pers.patch||''}).replace(/\]\]/g,'] ]')+']]';}
-function orderSendText(o){const pz=ordPers(o),v=x=>String(x||'').trim()||'Ninguno';return ['Foto del producto: '+(orderPhoto(o)?'(adjunta)':'(sin foto)'),'Nombre del producto: '+orderProductName(o),'Tamaño: '+v(o.size),'Nombre personalizado: '+v(pz.name),'Número personalizado: '+v(o.number),'Parche: '+v(pz.patch),'Cantidad: '+(Number(o.quantity)||1)].join('\n\n');}
+function orderSendText(o){const pz=ordPers(o),v=x=>String(x||'').trim()||'-';return ['Foto del producto: '+(orderPhoto(o)?'(adjunta)':'(sin foto)'),'Nombre del producto: '+orderProductName(o),'Tamaño: '+v(o.size),'Nombre personalizado: '+v(pz.name),'Número personalizado: '+v(o.number),'Parche: '+v(pz.patch),'Cantidad: '+(Number(o.quantity)||1)].join('\n\n');}
 function dataUrlToFile(u,name){try{const [h,b]=u.split(','),mime=(/data:([^;]+)/.exec(h)||[])[1]||'image/jpeg',bin=atob(b),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new File([a],name,{type:mime});}catch(e){return null;}}
 function orderSendTextMany(os){return os.map((o,i)=>(os.length>1?'Pedido '+(i+1)+' de '+os.length+'\n\n':'')+orderSendText(o)).join('\n\n────────\n\n');}
 async function orderPersPdf(os){
@@ -385,7 +385,7 @@ async function orderPersPdf(os){
   const head=()=>{doc.setFillColor(16,24,39).rect(M,y,W-2*M,9,'F');doc.setFont('helvetica','bold').setFontSize(8.5).setTextColor(255,255,255);let x=M;cols.forEach(([t,w])=>{const ls=doc.splitTextToSize(t,w-3);doc.text(ls,x+w/2,ls.length>1?y+3.8:y+5.8,{align:'center'});x+=w;});y+=9;};
   head();let units=0,idx=0;const lh=pt=>pt*MM*LHF;
   for(const o of os){
-    units+=Number(o.quantity)||0;const pz=ordPers(o),ph=orderPhoto(o)?await shrinkPhoto(orderPhoto(o)):null,v=x=>pdfTxt(x)||'Ninguno';
+    units+=Number(o.quantity)||0;const pz=ordPers(o),ph=orderPhoto(o)?await shrinkPhoto(orderPhoto(o)):null,v=x=>pdfTxt(x)||'-';
     doc.setFont('helvetica','bold').setFontSize(10);
     const cells=[null,doc.splitTextToSize(pdfTxt(orderProductName(o)),cols[1][1]-4),doc.splitTextToSize(v(o.size),cols[2][1]-4),doc.splitTextToSize(v(pz.name),cols[3][1]-4),doc.splitTextToSize(v(o.number),cols[4][1]-4),doc.splitTextToSize(v(pz.patch),cols[5][1]-4),[String(Number(o.quantity)||1)]];
     const rowH=Math.max(36,...cells.slice(1).map(c=>c.length*lh(10)+6));
