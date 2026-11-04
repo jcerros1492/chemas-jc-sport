@@ -367,17 +367,62 @@ async function deliverOrder(o,productId){const c=o.customerId?await get('custome
 /* ===== Formato con personalización (nombre, número y parche) =====
    Se guarda dentro del campo "notes" que ya existe en los pedidos: no se agregan columnas ni se toca Code.gs. */
 const PERS_RE=/\n?\[\[JC:(\{.*?\})\]\]\s*$/s;
-function ordPers(o){const m=PERS_RE.exec(String(o&&o.notes||''));if(!m)return {on:false,name:'',patch:''};try{const j=JSON.parse(m[1]);return {on:true,name:String(j.n||''),patch:String(j.p||'')};}catch(e){return {on:false,name:'',patch:''};}}
+function ordPers(o){const m=PERS_RE.exec(String(o&&o.notes||''));if(!m)return {on:false,name:'',patch:'',sent:0};try{const j=JSON.parse(m[1]);return {on:true,name:String(j.n||''),patch:String(j.p||''),sent:Number(j.s)||0};}catch(e){return {on:false,name:'',patch:'',sent:0};}}
 function ordNotes(o){return String(o&&o.notes||'').replace(PERS_RE,'').trim();}
-function packNotes(text,pers){const t=String(text||'').trim();if(!pers||!pers.on)return t;return (t?t+'\n':'')+'[[JC:'+JSON.stringify({n:pers.name||'',p:pers.patch||''}).replace(/\]\]/g,'] ]')+']]';}
+function packNotes(text,pers){const t=String(text||'').trim();if(!pers||!pers.on)return t;return (t?t+'\n':'')+'[[JC:'+JSON.stringify(pers.sent?{n:pers.name||'',p:pers.patch||'',s:pers.sent}:{n:pers.name||'',p:pers.patch||''}).replace(/\]\]/g,'] ]')+']]';}
 function orderSendText(o){const pz=ordPers(o),v=x=>String(x||'').trim()||'Ninguno';return ['Foto del producto: '+(orderPhoto(o)?'(adjunta)':'(sin foto)'),'Nombre del producto: '+orderProductName(o),'Tamaño: '+v(o.size),'Nombre personalizado: '+v(pz.name),'Número personalizado: '+v(o.number),'Parche: '+v(pz.patch),'Cantidad: '+(Number(o.quantity)||1)].join('\n\n');}
 function dataUrlToFile(u,name){try{const [h,b]=u.split(','),mime=(/data:([^;]+)/.exec(h)||[])[1]||'image/jpeg',bin=atob(b),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new File([a],name,{type:mime});}catch(e){return null;}}
-async function orderSend(id){const o=await get('orders',id);if(!o)return;const text=orderSendText(o),ph=orderPhoto(o);
-  showModal('Enviar pedido al proveedor',`<p class="form-help" style="margin:0 0 10px">Se envía la foto junto con este mensaje. Lo que no aplica dice «Ninguno».</p>${ph?`<div style="text-align:center;margin-bottom:12px"><img src="${ph}" alt="Foto del producto" style="max-width:100%;max-height:220px;border-radius:12px"></div>`:'<p class="form-help">Este pedido no tiene foto. Puedes agregarla en «Editar».</p>'}<div class="rc-note" style="white-space:pre-line;user-select:text">${esc(text)}</div><div style="margin-top:12px"><button type="button" class="secondary" id="ordCopy">Copiar texto</button></div>`,async()=>{
-    const file=ph?dataUrlToFile(ph,'pedido.jpg'):null;
-    try{if(navigator.share){if(file&&navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],text});return false;}await navigator.share({text});return false;}}catch(e){if(e&&e.name==='AbortError')return false;}
-    window.open('https://wa.me/?text='+encodeURIComponent(text),'_blank');notify('Se abrió WhatsApp con el texto. La foto adjúntala desde «📷 Foto».');return false;},'Compartir por WhatsApp');
-  $('#ordCopy').onclick=async()=>{try{await navigator.clipboard.writeText(text);notify('Texto copiado.');}catch(e){notify('No se pudo copiar. Mantén presionado el texto para copiarlo.');}};}
+function orderSendTextMany(os){return os.map((o,i)=>(os.length>1?'Pedido '+(i+1)+' de '+os.length+'\n\n':'')+orderSendText(o)).join('\n\n────────\n\n');}
+async function orderPersPdf(os){
+  if(!window.jspdf){notify('El generador de PDF no está disponible. Recarga la app con internet una vez.');return null;}
+  const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}),W=297,H=210,M=10,FOOT=8,MM=0.3528,LHF=1.2;doc.setLineHeightFactor(LHF);
+  const cols=[['Foto del producto',46],['Nombre del producto',64],['Tamaño',22],['Nombre personalizado',46],['Número personalizado',30],['Parche',46],['Cantidad',23]];
+  let y=M;const logo=await shrinkPhoto('logo.png',240);
+  if(logo)doc.addImage(logo.data,'JPEG',M,y,24,24*logo.h/logo.w);
+  doc.setFont('helvetica','bold').setFontSize(17).setTextColor(16,24,39).text('PEDIDO AL PROVEEDOR',M+30,y+8);
+  doc.setFont('helvetica','normal').setFontSize(10).setTextColor(90,90,90).text('CHEMAS JC SPORT',M+30,y+14);
+  doc.text('Fecha: '+dateFmt(Date.now()),M+30,y+20);doc.setFontSize(9).text('Generado: '+dateTimeFmt(Date.now()),W-M,y+8,{align:'right'});y+=30;
+  const head=()=>{doc.setFillColor(16,24,39).rect(M,y,W-2*M,9,'F');doc.setFont('helvetica','bold').setFontSize(8.5).setTextColor(255,255,255);let x=M;cols.forEach(([t,w])=>{const ls=doc.splitTextToSize(t,w-3);doc.text(ls,x+w/2,ls.length>1?y+3.8:y+5.8,{align:'center'});x+=w;});y+=9;};
+  head();let units=0,idx=0;const lh=pt=>pt*MM*LHF;
+  for(const o of os){
+    units+=Number(o.quantity)||0;const pz=ordPers(o),ph=orderPhoto(o)?await shrinkPhoto(orderPhoto(o)):null,v=x=>pdfTxt(x)||'Ninguno';
+    doc.setFont('helvetica','bold').setFontSize(10);
+    const cells=[null,doc.splitTextToSize(pdfTxt(orderProductName(o)),cols[1][1]-4),doc.splitTextToSize(v(o.size),cols[2][1]-4),doc.splitTextToSize(v(pz.name),cols[3][1]-4),doc.splitTextToSize(v(o.number),cols[4][1]-4),doc.splitTextToSize(v(pz.patch),cols[5][1]-4),[String(Number(o.quantity)||1)]];
+    const rowH=Math.max(36,...cells.slice(1).map(c=>c.length*lh(10)+6));
+    if(y+rowH>H-M-FOOT){doc.addPage();y=M;head();}
+    if(idx%2===1)doc.setFillColor(244,246,249).rect(M,y,W-2*M,rowH,'F');
+    doc.setDrawColor(210,215,222).setLineWidth(0.2);let x=M;cols.forEach(([,w])=>{doc.rect(x,y,w,rowH);x+=w;});
+    x=M;
+    if(ph){const bw=cols[0][1]-4,bh=rowH-4,k=Math.min(bw/ph.w,bh/ph.h),w=ph.w*k,h=ph.h*k;doc.addImage(ph.data,'JPEG',x+2+(bw-w)/2,y+2+(bh-h)/2,w,h);}else doc.setFont('helvetica','normal').setFontSize(9).setTextColor(150,150,150).text('Sin foto',x+cols[0][1]/2,y+rowH/2+1,{align:'center'});
+    x+=cols[0][1];
+    for(let i=1;i<7;i++){const c=cells[i],w=cols[i][1],center=i!==1&&i!==5||i===5;doc.setFont('helvetica','bold').setFontSize(i===6?14:10).setTextColor(20,20,20);const hh=c.length*lh(i===6?14:10);const ty=y+(rowH-hh)/2+0.72*(i===6?14:10)*MM;if(i===1)doc.text(c,x+2,ty);else doc.text(c,x+w/2,ty,{align:'center'});x+=w;}
+    y+=rowH;idx++;
+  }
+  if(y+12>H-M-FOOT){doc.addPage();y=M;}
+  doc.setFont('helvetica','bold').setFontSize(11).setTextColor(16,24,39).text(`Total: ${os.length} producto(s) · ${units} unidad(es)`,W-M,y+8,{align:'right'});
+  const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);doc.setFont('helvetica','normal').setFontSize(8).setTextColor(130,130,130).text(`Chemas JC Sport · Página ${i} de ${n}`,W/2,H-6,{align:'center'});}
+  return {blob:doc.output('blob'),units};
+}
+async function orderSendMany(preId=''){
+  const all0=await all('orders');
+  const list=all0.filter(o=>ordPers(o).on&&(['Pendiente','Encargado'].includes(o.status)||o.id===preId)).sort((a,b)=>(ordPers(a).sent?1:0)-(ordPers(b).sent?1:0)||String(a.createdAt).localeCompare(String(b.createdAt)));
+  if(!list.length)return notify('No hay pedidos con personalización pendientes. Crea un pedido y elige «Con personalización».');
+  const rows=list.map(o=>{const pz=ordPers(o),on=preId?o.id===preId:!pz.sent;return `<label class="radio-row" style="align-items:center"><input type="checkbox" name="sel" value="${o.id}" ${on?'checked':''}><span><strong>${esc(orderProductName(o))}</strong><small>${[o.size&&'Talla '+o.size,pz.name,o.number&&'N.º '+o.number,pz.patch&&'Parche: '+pz.patch,(Number(o.quantity)||1)+' ud.'].filter(Boolean).map(esc).join(' · ')}${pz.sent?' · <b style="color:#087f5b">Enviado ✓ '+dateFmt(pz.sent)+'</b>':''}</small></span></label>`;}).join('');
+  showModal('Enviar al proveedor',`<p class="form-help" style="margin:0 0 10px">Marca los pedidos que van juntos en el mismo envío. Se crea un PDF con todos, con la foto de cada uno.</p>${rows}<label class="radio-row" style="align-items:center;margin-top:8px"><input type="checkbox" name="markSent" checked><span><small>Marcar como «Enviado» al compartir el PDF</small></span></label>`,async f=>{
+    const ids=f.getAll('sel'),mark=!!f.get('markSent'),os=list.filter(o=>ids.includes(o.id));
+    if(!os.length){notify('Marca al menos un pedido.');return false;}
+    notify('Generando PDF…');const r=await orderPersPdf(os);if(!r)return false;
+    const name=`Pedido-proveedor-${localDate()}.pdf`,url=URL.createObjectURL(r.blob),text=orderSendTextMany(os);
+    showModal('PDF listo',`<p style="margin:0 0 10px"><strong>${os.length}</strong> producto(s) · <strong>${r.units}</strong> unidad(es)</p><p class="form-help">Toca «Compartir PDF» para enviarlo por WhatsApp, correo u otra app. También puedes <a href="${url}" download="${name}">descargarlo</a>.</p><div style="margin-top:12px"><button type="button" class="secondary" id="ordCopy">Copiar texto del pedido</button></div>`,async()=>{
+      const file=new File([r.blob],name,{type:'application/pdf'});let done=false;
+      try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Pedido al proveedor'});done=true;}}catch(e){if(e&&e.name==='AbortError')return false;console.warn(e);}
+      if(!done){const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();notify('PDF descargado.');done=true;}
+      if(mark){const now=Date.now();for(const o of os){const cur=await get('orders',o.id),pz=ordPers(cur);if(cur&&pz.on)await put('orders',{...cur,notes:packNotes(ordNotes(cur),{...pz,sent:now})});}await render();}
+      return true;},'Compartir PDF');
+    $('#ordCopy').onclick=async()=>{try{await navigator.clipboard.writeText(text);notify('Texto copiado.');}catch(e){notify('No se pudo copiar.');}};
+    return false;},'Crear PDF');
+}
+const orderSend=id=>orderSendMany(id);
 async function openOrder(o={}){
   const editing=!!o.id;let photo=o.photo||'';
   const cs=(await all('customers')).sort((a,b)=>String(a.name).localeCompare(String(b.name),'es',{sensitivity:'base'}));
@@ -397,7 +442,7 @@ async function openOrder(o={}){
     if(depNew>0&&!customerId)return notify('Para registrar un adelanto elige el cliente.'),false;
     if(depNew>total)return notify('Los adelantos ('+money(depNew)+') no pueden superar el total del pedido ('+money(total)+').'),false;
     const dv=f.get('orderDate')||localDate(),createdAt=(o.createdAt&&localDate(o.createdAt)===dv)?o.createdAt:(dv===localDate()?Date.now():new Date(dv+'T12:00:00').getTime());let photoSmall=o.photoSmall||'';if(photo&&(photo!==o.photo||!photoSmall))photoSmall=await makeThumb(photo);const pers=f.get('fmt')==='pers',shoe=/tacos|tenis/i.test(f.get('category'))&&!pers;
-    await put('orders',{...o,id:o.id||uid(),customerId,category:f.get('category'),supplierMode:f.get('supplierMode')||'',quantity,team,color:f.get('color').trim(),size:f.get('size').trim(),number:shoe?'':f.get('number').trim(),gender:shoe?(f.get('gender')||''):'',unitPrice,unitCost,advances,photo,photoSmall,notes:packNotes(f.get('notes'),{on:pers,name:(f.get('persName')||'').trim(),patch:(f.get('persPatch')||'').trim()}),status:statusEditable?f.get('status'):o.status,createdAt});
+    await put('orders',{...o,id:o.id||uid(),customerId,category:f.get('category'),supplierMode:f.get('supplierMode')||'',quantity,team,color:f.get('color').trim(),size:f.get('size').trim(),number:shoe?'':f.get('number').trim(),gender:shoe?(f.get('gender')||''):'',unitPrice,unitCost,advances,photo,photoSmall,notes:packNotes(f.get('notes'),{on:pers,name:(f.get('persName')||'').trim(),patch:(f.get('persPatch')||'').trim(),sent:ordPers(o).sent}),status:statusEditable?f.get('status'):o.status,createdAt});
     await render();notify(editing?'Pedido actualizado.':'Pedido guardado.');});
   const form=$('#modalForm');attachSelectSearch(form.elements.customerId,custItems,{placeholder:'Buscar cliente por nombre…',onCreate:async name=>{const c={id:uid(),name,phone:'',note:'',createdAt:Date.now()};await put('customers',c);return c;}});
   {const catSel=form.elements.category,fmtSel=form.elements.fmt,sync=()=>{const pz=fmtSel.value==='pers',sh=/tacos|tenis/i.test(catSel.value)&&!pz;$('#wrapNumber').hidden=sh;$('#wrapGender').hidden=!(/tacos|tenis/i.test(catSel.value)&&!pz);$('#wrapPers').hidden=!pz;const lb=$('#wrapNumber label');if(lb)lb.textContent=pz?'Número personalizado':'Dorsal';};catSel.onchange=sync;fmtSel.onchange=sync;sync();}
@@ -477,7 +522,7 @@ async function orderReportPdf(kind='camisas'){
   const blob=doc.output('blob'),name=`Pedido-${kind==='calzado'?'tacos-tenis':'camisas'}-${localDate()}.pdf`,url=URL.createObjectURL(blob);
   showModal('Reporte listo',`<p style="margin:0 0 10px"><strong>${os.length}</strong> línea(s) de pedido · <strong>${units}</strong> unidad(es)</p><p class="form-help">Toca «Compartir PDF» para enviarlo por WhatsApp, correo u otra app. También puedes <a href="${url}" download="${name}">descargarlo</a>.</p>`,async()=>{const file=new File([blob],name,{type:'application/pdf'});try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Pedido a proveedor'});return true;}}catch(e){if(e&&e.name==='AbortError')return false;console.warn(e);}const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();notify('PDF descargado.');return true;},'Compartir PDF');
 }
-function bindOrderFilters(){['ordFrom','ordTo','ordStatus'].forEach(id=>{const el=$('#'+id);if(el)el.onchange=renderOrders;});$('#ordClear').onclick=()=>{$('#ordFrom').value='';$('#ordTo').value='';$('#ordStatus').value='activos';renderOrders();};$('#ordPdfShirts').onclick=()=>orderReportPdf('camisas');$('#ordPdfShoes').onclick=()=>orderReportPdf('calzado');}
+function bindOrderFilters(){['ordFrom','ordTo','ordStatus'].forEach(id=>{const el=$('#'+id);if(el)el.onchange=renderOrders;});$('#ordClear').onclick=()=>{$('#ordFrom').value='';$('#ordTo').value='';$('#ordStatus').value='activos';renderOrders();};$('#ordPdfShirts').onclick=()=>orderReportPdf('camisas');$('#ordSendMany').onclick=()=>orderSendMany();$('#ordPdfShoes').onclick=()=>orderReportPdf('calzado');}
 function orderFilters(){const f=$('#ordFrom')?.value,t=$('#ordTo')?.value,st=$('#ordStatus')?.value||'activos';return {from:f?new Date(f+'T00:00:00').getTime():0,to:t?new Date(t+'T23:59:59').getTime():Infinity,st};}
 function orderPassesFilter(o,fl){const d=Number(o.createdAt)||0;if(d<fl.from||d>fl.to)return false;if(fl.st==='activos')return o.status!=='Cancelado';if(fl.st==='todos')return true;return o.status===fl.st;}
 async function renderOrders(){
@@ -502,7 +547,7 @@ async function renderOrders(){
     let money_=''; 
     if(!o.customerId){if(total>0)money_=`<div class="rc-money"><div><small>Precio de venta c/u</small><strong>${money(Number(o.unitPrice))}</strong></div></div>`;}
     else if(total>0){money_=`<div class="rc-money"><div><small>Total</small><strong>${money(total)}</strong></div><div><small>Adelanto</small><strong>${money(dep)}</strong></div>${op?`<div><small>Saldo</small><strong class="${bal>0?'danger':''}">${money(bal)}</strong></div>`:''}</div>${(o.advances||[]).length?`<div class="rc-sub">${o.advances.map(a=>dateFmt(a.date)+' · '+money(a.amount)).join('  |  ')}</div>`:''}`;}
-    return `<article class="rc"><div class="rc-top"><div class="rc-title"><strong>${esc(orderProductName(o))}</strong><span class="rc-sub">${o.quantity} ud.${detail?' · '+esc(detail):''}</span></div><span class="pill ${op&&total>0&&bal>0?'debt':''}">${esc(o.status)}</span></div><div class="rc-meta"><span>📅 ${dateFmt(o.createdAt)}</span><span>${o.customerId?'👤 '+esc(cm[o.customerId]||'Cliente eliminado'):'<span class="pill">Para mi inventario</span>'}</span></div>${money_}${ordPers(o).on?`<div class="rc-sub">✎ Personalizado${ordPers(o).name?' · '+esc(ordPers(o).name):''}${ordPers(o).patch?' · Parche: '+esc(ordPers(o).patch):''}</div>`:''}${ordNotes(o)?`<div class="rc-note">${esc(ordNotes(o))}</div>`:''}${stateNote?`<div class="rc-sub">${stateNote}</div>`:''}<div class="rc-actions">${acts.join('')}</div></article>`;};
+    return `<article class="rc"><div class="rc-top"><div class="rc-title"><strong>${esc(orderProductName(o))}</strong><span class="rc-sub">${o.quantity} ud.${detail?' · '+esc(detail):''}</span></div><span class="pill ${op&&total>0&&bal>0?'debt':''}">${esc(o.status)}</span></div><div class="rc-meta"><span>📅 ${dateFmt(o.createdAt)}</span><span>${o.customerId?'👤 '+esc(cm[o.customerId]||'Cliente eliminado'):'<span class="pill">Para mi inventario</span>'}</span></div>${money_}${ordPers(o).on?`<div class="rc-sub">✎ Personalizado${ordPers(o).name?' · '+esc(ordPers(o).name):''}${ordPers(o).patch?' · Parche: '+esc(ordPers(o).patch):''}${ordPers(o).sent?' · <b style="color:var(--green-dark)">Enviado ✓ '+dateFmt(ordPers(o).sent)+'</b>':''}</div>`:''}${ordNotes(o)?`<div class="rc-note">${esc(ordNotes(o))}</div>`:''}${stateNote?`<div class="rc-sub">${stateNote}</div>`:''}<div class="rc-actions">${acts.join('')}</div></article>`;};
   $('#ordersList').innerHTML=os.length?summary+`<div class="rc-list">${os.map(card).join('')}</div>`:empty(os0.length?'No hay pedidos con esos filtros.':'Todavía no hay pedidos. Crea uno para comenzar.','▣');
 }
 async function editOrder(id){const o=await get('orders',id);if(o)openOrder(o);}
