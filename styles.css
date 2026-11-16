@@ -130,3 +130,5 @@ footer .theme-btn{margin-left:8px}
 body.money-hidden .sob-amt{filter:blur(8px);user-select:none}
 .dec-prev{display:block;min-height:16px;font-size:12px;margin-top:3px}
 #page-accounts .panel{padding:16px}
+
+.rc-actions select{max-width:100%;padding:6px 8px;border:1px solid var(--line,#d0d5dd);border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:13px}
