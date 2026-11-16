@@ -581,16 +581,17 @@ async function renderAccounts(){
       if($('#sobIniInv').checked){for(const [team,qty,cost] of [['Saprissa',2,17000],['Alajuela',2,16000],['Costa Rica',2,12500]])await sobSave('cfg-inv-','Camisas de contado',{t:'inv',team,qty,qty0:qty,cost,d:ts});}
       await render();notify('Saldos iniciales guardados.');};
     return;}
-  const pd=await sobPending(movs,skips),pendHTML=sobPendHTML(pd);
+  const pd=await sobPending(movs,skips),pendHTML=sobPendHTML(pd),ctlHTML=sobControlHTML(await sobControlData(invs));
   const bal={CHEMAS:0,TENIS:0,GANANCIA:0};movs.forEach(m=>{if(bal[m.s]!==undefined)bal[m.s]+=Number(m.a)||0;});
   const cards=SOBRES.map(([k,name,sub,cls])=>`<div class="sob-card ${cls}"><small>${name}</small><strong class="sob-amt">${fmtDec(bal[k])}</strong><span>${sub}</span></div>`).join('');
   const live=invs.filter(i=>Number(i.qty)>0),invested=live.reduce((n,i)=>n+(Number(i.qty)||0)*(Number(i.cost)||0),0);
   const invHTML=`<div class="panel" style="margin-top:14px"><div class="section-head" style="margin:0 0 8px"><div><h3 style="margin:0">Camisas de contado por vender</h3><p class="muted" style="margin:2px 0 0">Compradas con plata de Ganancia. Al venderlas, el cobro vuelve a Ganancia.</p></div><button class="secondary" id="sobBuy" type="button">＋ Compra de contado</button></div>${live.length?`<div class="rc-list">${live.map(i=>`<article class="rc"><div class="rc-top"><div class="rc-title"><strong>${esc(i.team)}</strong><span class="rc-sub">${i.qty} por vender · costo ${fmtDec(i.cost)} c/u</span></div><div class="rc-bal"><small>Invertido</small><strong class="sob-amt">${fmtDec((Number(i.qty)||0)*(Number(i.cost)||0))}</strong></div></div><div class="rc-actions"><button class="tiny-btn" data-sob-sell="${i.id}">Vendí 1</button><button class="tiny-btn" data-sob-inv-edit="${i.id}">Editar</button><button class="tiny-btn" data-sob-inv-del="${i.id}">Quitar</button></div></article>`).join('')}</div><p class="muted" style="margin:10px 0 0">Total invertido por vender: <strong class="sob-amt">${fmtDec(invested)}</strong></p>`:'<p class="muted">No tienes camisas de contado por vender.</p>'}</div>`;
   const list=movs.filter(m=>!filterVal||m.s===filterVal).sort((a,b)=>(b.d||0)-(a.d||0)||(b.createdAt||0)-(a.createdAt||0));
   const rows=list.slice(0,150).map(m=>{const a=Number(m.a)||0;return `<article class="rc"><div class="rc-top"><div class="rc-title"><strong>${esc(m.c||'Movimiento')}</strong><span class="rc-sub">${esc(m.n||'')}${m.n?' · ':''}${dateFmt(m.d)} · ${esc(SOB_NAME[m.s]||m.s)}</span></div><div class="rc-bal"><strong class="sob-amt ${a<0?'danger':'ok'}">${a>0?'+ ':''}${fmtDec(a)}</strong></div></div>${m.c==='Saldo inicial'?'':`<div class="rc-actions"><button class="tiny-btn" data-sob-del="${m.id}">Eliminar</button></div>`}</article>`;}).join('');
-  root.innerHTML=`<div class="sob-cards">${cards}</div>${pendHTML}${invHTML}<div class="panel" style="margin-top:14px"><div class="section-head" style="margin:0 0 8px"><h3 style="margin:0">Movimientos</h3><div class="field" style="margin:0;min-width:200px"><select id="sobFilter" aria-label="Filtrar por sobre"><option value="">Todos los sobres</option>${SOBRES.map(([k,n])=>`<option value="${k}" ${filterVal===k?'selected':''}>${n}</option>`).join('')}</select></div></div>${rows?`<div class="rc-list">${rows}</div>${list.length>150?'<p class="muted">Se muestran los 150 más recientes.</p>':''}`:empty('Todavía no hay movimientos con ese filtro.','▣')}</div>`;
+  root.innerHTML=`<div class="sob-cards">${cards}</div>${pendHTML}${ctlHTML}${invHTML}<div class="panel" style="margin-top:14px"><div class="section-head" style="margin:0 0 8px"><h3 style="margin:0">Movimientos</h3><div class="field" style="margin:0;min-width:200px"><select id="sobFilter" aria-label="Filtrar por sobre"><option value="">Todos los sobres</option>${SOBRES.map(([k,n])=>`<option value="${k}" ${filterVal===k?'selected':''}>${n}</option>`).join('')}</select></div></div>${rows?`<div class="rc-list">${rows}</div>${list.length>150?'<p class="muted">Se muestran los 150 más recientes.</p>':''}`:empty('Todavía no hay movimientos con ese filtro.','▣')}</div>`;
   $('#sobFilter').onchange=renderAccounts;
   sobBindPending(root,pd);
+  root.querySelectorAll('[data-ctl]').forEach(b=>b.onclick=()=>{sobCtlFilter=b.dataset.ctl;renderAccounts();});
   $('#sobBuy').onclick=sobBuyForm;
   root.querySelectorAll('[data-sob-sell]').forEach(b=>b.onclick=()=>sobSellForm(b.dataset.sobSell));
   root.querySelectorAll('[data-sob-inv-edit]').forEach(b=>b.onclick=()=>sobInvEdit(b.dataset.sobInvEdit));
@@ -680,6 +681,35 @@ function sobBindPending(root,pd){
   root.querySelectorAll('[data-pend-skip]').forEach(b=>b.onclick=async()=>{const x=by[b.dataset.pendSkip];if(!x||!confirm('¿Que este movimiento no entre a ningún sobre? (por ejemplo, un adelanto que usaste para pagar al proveedor)'))return;await sobSave('cfg-mov-','Omitido',{t:'skip',src:x.src});await render();notify('Listo, no entra a sobres.');});
   const all=$('#sobPendAll');if(all)all.onclick=async()=>{if(!confirm('¿Acomodar los '+all2.length+' movimientos con el sobre que se sugiere?'))return;all.disabled=true;for(const x of pd.cobros)await doCobro(x);for(const x of pd.pagos)await doPago(x);await render();notify('Todo acomodado.');};
 }
+/* ---- Control de camisas (colores) ---- */
+let sobCtlFilter='';
+async function sobControlData(invs){
+  const d=await consigData();const rows=[];
+  if(d){const [sales,orders]=await Promise.all([all('sales'),all('orders')]),sm=Object.fromEntries(sales.map(s=>[s.id,s])),om=Object.fromEntries(orders.map(o=>[o.id,o]));const led={};
+    const rowOf=async(cid,id)=>{if(!cid)return null;if(!led[cid])led[cid]=await getCustomerSaleLedger(cid);return led[cid].ledger.find(r=>r.sale.id===id)||null;};
+    for(const i of d.groups.Camisas.items){const ref=i.ref||'',kind=ref.split(':')[0],id=ref.slice(ref.indexOf(':')+1);let price=null,paidC=null,bal=0,own=false;
+      if(kind==='sale'&&sm[id]){const s=sm[id];price=Number(s.unitPrice)||null;const r=await rowOf(s.customerId,s.id);bal=r?r.balance:Math.max(0,(Number(s.total)||0)-(Number(s.initialPayment)||0));paidC=r?r.paid:(Number(s.initialPayment)||0);}
+      else if(kind==='order'&&om[id]){const o=om[id];price=Number(o.unitPrice)||null;if(!o.customerId)own=true;else{const r=await rowOf(o.customerId,'order:'+o.id);bal=r?r.balance:Math.max(0,orderTotal(o)-orderDeposit(o));paidC=r?r.paid:orderDeposit(o);}}
+      let st;if(own)st='s';else if(i.paidQty>=i.qty)st='g';else if(bal>0.5)st='y';else st='r';
+      rows.push({st,name:i.productName,size:i.size,who:i.who,date:i.date,kind:i.kind,qty:i.qty,paidQty:i.paidQty,price,cost:i.unitCost,paidC,bal,own});}}
+  const prods=(await all('products')).filter(p=>p.category==='Camisa'&&(Number(p.stock)||0)>0&&isConsig(p,p.name));
+  for(const p of prods)rows.push({st:'s',name:p.name,size:p.size||'',who:'',date:0,kind:'En tu inventario',qty:Number(p.stock)||0,stock:true});
+  for(const v of (invs||[]).filter(x=>Number(x.qty)>0))rows.push({st:'s',name:v.team,size:'',who:'',date:v.d||0,kind:'De contado, por vender',qty:Number(v.qty)||0,stock:true});
+  return rows;}
+const CTL={r:['🔴','Falta pagar a Brayan'],y:['🟡','Cliente me debe'],g:['🟢','Todo al día'],s:['⚪','En stock']};
+function sobControlHTML(rows){
+  const cnt=k=>rows.filter(r=>r.st===k).reduce((n,r)=>n+(r.stock?r.qty:Math.max(1,r.qty-(r.paidQty||0)*(r.st==='g'?0:1))),0);
+  const cn={r:rows.filter(r=>r.st==='r').length,y:rows.filter(r=>r.st==='y').length,g:rows.filter(r=>r.st==='g').length,s:rows.filter(r=>r.st==='s').reduce((n,r)=>n+(r.stock?r.qty:1),0)};
+  const owe=rows.filter(r=>r.st==='r').reduce((n,r)=>n+(r.qty-(r.paidQty||0))*(r.cost||0),0);
+  const order={r:0,y:1,g:2,s:3},shown=rows.filter(r=>!sobCtlFilter||r.st===sobCtlFilter).sort((a,b)=>order[a.st]-order[b.st]||(b.date||0)-(a.date||0));
+  const money0=n=>fmtDec(n).replace(/,00$/,'');
+  const card=r=>{const [ic,lb]=CTL[r.st];let body='';
+    if(r.st==='r'||r.st==='y'||r.st==='g'){const left=r.qty-(r.paidQty||0),gain=r.price!=null?Math.max(0,r.price-r.cost)*r.qty:null;
+      body=`<div class="ctl-money"><div>Precio<b>${r.price!=null?money0(r.price*r.qty):'-'}</b></div><div>Costo Brayan<b>${money0(r.cost*r.qty)}${r.st==='g'?' ✔':''}</b></div><div>${r.st==='g'?'Ganancia':'Cliente pagó'}<b>${r.st==='g'?(gain!=null?money0(gain):'-'):(r.paidC!=null?money0(r.paidC)+(r.bal<=0.5?' ✔':''):'-')}</b></div></div>`+(r.st==='y'?`<p class="ctl-note">Todavía debe ${money0(r.bal)}. No se paga a Brayan hasta que termine.</p>`:'')+(r.paidQty>0&&r.paidQty<r.qty?`<p class="ctl-note">${r.paidQty} de ${r.qty} ya pagadas a Brayan.</p>`:'');}
+    return `<article class="rc ctl-${r.st}"><div class="rc-top"><div class="rc-title"><strong>${esc(r.name)}${r.size?' · '+esc(r.size):''}${r.qty>1?' · ×'+r.qty:''}</strong><span class="rc-sub">${r.who?esc(r.who)+' · ':''}${esc(r.kind||'')}${r.date?' · '+dateFmt(r.date):''}</span></div><span class="ctl-pill ctl-p-${r.st}">${ic} ${lb}</span></div>${body}</article>`;};
+  const chip=k=>`<div class="ctl-chip ctl-p-${k}"><b>${cn[k]}</b><span>${CTL[k][1]}</span></div>`;
+  const tab=(k,l)=>`<button type="button" class="ctl-tab ${sobCtlFilter===k?'on':''}" data-ctl="${k}">${l}</button>`;
+  return `<div class="panel" style="margin-top:14px"><div class="section-head" style="margin:0 0 4px"><div><h3 style="margin:0">Control de camisas</h3><p class="muted" style="margin:2px 0 0">Se pinta solo con tus ventas, abonos y pagos a Brayan.</p></div></div><div class="ctl-chips">${chip('r')}${chip('y')}${chip('g')}${chip('s')}</div><div class="ctl-tabs">${tab('','Todas')}${tab('r','🔴 Rojo')}${tab('y','🟡 Amarillo')}${tab('g','🟢 Verde')}${tab('s','⚪ Gris')}</div><div class="rc-list">${shown.slice(0,80).map(card).join('')||'<p class="muted">No hay camisas en este color.</p>'}</div>${shown.length>80?'<p class="muted">Se muestran las 80 primeras.</p>':''}<div class="ctl-tot"><span>Falta pagar a Brayan<small>solo camisas que el cliente ya pagó</small></span><strong class="sob-amt">${money0(owe)}</strong></div></div>`;}
 function orderPassesFilter(o,fl){const d=Number(o.createdAt)||0;if(d<fl.from||d>fl.to)return false;if(fl.q){const pz=ordPers(o),hay=norm([o.team,o.category,o.color,o.size,o.number,o.gender,o.status,o.customer,(window.ORD_CM||{})[o.customerId],pz.name,pz.patch,ordNotes(o)].filter(Boolean).join(' '));if(!fl.q.split(/\s+/).every(w=>hay.includes(w)))return false;}if(fl.st==='activos')return o.status!=='Cancelado'&&(fl.q?true:!(o.status==='Entregado'&&!o.saleId&&!o.customerId));if(fl.st==='todos')return true;return o.status===fl.st;}
 async function renderOrders(){
   const [os0,cs]=await Promise.all([all('orders'),all('customers')]);const cm=Object.fromEntries(cs.map(c=>[c.id,c.name]));window.ORD_CM=cm;const fl=orderFilters();const os=os0.filter(o=>orderPassesFilter(o,fl));
