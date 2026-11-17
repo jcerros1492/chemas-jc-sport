@@ -147,3 +147,5 @@ body.money-hidden .sob-amt{filter:blur(8px);user-select:none}
 .ctl-money{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:rgba(152,162,179,.14);border-radius:10px;padding:8px;font-size:11px;opacity:.95;margin-top:6px}.ctl-money b{display:block;font-size:13px}
 .ctl-note{margin:6px 0 0;font-size:12px;color:#b87400}
 .ctl-tot{display:flex;justify-content:space-between;align-items:center;background:#101827;color:#fff;border-radius:12px;padding:12px;margin-top:6px;font-size:13px}.ctl-tot small{display:block;opacity:.7;font-size:11px}.ctl-tot strong{font-size:16px}
+
+.adv-row{grid-template-columns:1fr 1fr}.adv-row input[name^=advRef]{grid-column:1/-1;min-height:44px}.adv-row .adv-del{grid-column:1/-1}
