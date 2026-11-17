@@ -710,6 +710,37 @@ function sobControlHTML(rows){
   const chip=k=>`<div class="ctl-chip ctl-p-${k}"><b>${cn[k]}</b><span>${CTL[k][1]}</span></div>`;
   const tab=(k,l)=>`<button type="button" class="ctl-tab ${sobCtlFilter===k?'on':''}" data-ctl="${k}">${l}</button>`;
   return `<div class="panel" style="margin-top:14px"><div class="section-head" style="margin:0 0 4px"><div><h3 style="margin:0">Control de camisas</h3><p class="muted" style="margin:2px 0 0">Se pinta solo con tus ventas, abonos y pagos a Brayan.</p></div></div><div class="ctl-chips">${chip('r')}${chip('y')}${chip('g')}${chip('s')}</div><div class="ctl-tabs">${tab('','Todas')}${tab('r','🔴 Rojo')}${tab('y','🟡 Amarillo')}${tab('g','🟢 Verde')}${tab('s','⚪ Gris')}</div><div class="rc-list">${shown.slice(0,80).map(card).join('')||'<p class="muted">No hay camisas en este color.</p>'}</div>${shown.length>80?'<p class="muted">Se muestran las 80 primeras.</p>':''}<div class="ctl-tot"><span>Falta pagar a Brayan<small>solo camisas que el cliente ya pagó</small></span><strong class="sob-amt">${money0(owe)}</strong></div></div>`;}
+/* ---- Reporte de cuenta por búsqueda (Ventas), sin montos ---- */
+async function salesReportData(q){
+  const [sales,customers,pays,products]=await Promise.all([all('sales'),all('customers'),all('payments'),all('products')]);
+  const cmap=Object.fromEntries(customers.map(c=>[c.id,c.name])),pm=Object.fromEntries(pays.map(p=>[p.id,p])),prm=Object.fromEntries(products.map(p=>[p.id,p]));
+  const sq=norm(q),shown=sales.filter(s=>norm([s.productName,s.size,s.customerName,cmap[s.customerId],s.category,dateFmt(s.createdAt)].join(' ')).includes(sq)).sort((a,b)=>a.createdAt-b.createdAt);
+  const led={},rows=[];
+  for(const s of shown){let row=null;if(s.customerId){if(!led[s.customerId])led[s.customerId]=await getCustomerSaleLedger(s.customerId);row=led[s.customerId].ledger.find(r=>r.sale.id===s.id)||null;}
+    const bal=row?row.balance:Math.max(0,(Number(s.total)||0)-(Number(s.initialPayment)||0));
+    const items=row?row.items:((Number(s.initialPayment)||0)>0?[{date:s.createdAt,type:'Pago inicial'}]:[]);
+    rows.push({name:s.productName,size:s.size||(prm[s.productId]||{}).size||'',who:s.customerName||cmap[s.customerId]||'',date:s.createdAt,paid:bal<1,
+      pays:items.map(i=>{const p=i.paymentId?pm[i.paymentId]:null,ref=String((p&&p.receiptRef)||(!p&&s.receiptRef)||'').trim();return {date:i.date,ref,cash:/efectivo|cash/i.test(ref),kind:i.type};})});}
+  return rows;}
+const repVerb=(r,p)=>p.kind==='Adelanto de pedido'?'Adelantó el':(r.paid?'Pagó el':'Abonó el');
+const repComp=p=>p.cash?'Efectivo':'Comp. '+(p.ref||'-');
+function salesReportHTML(title,rows){const pend=rows.filter(r=>!r.paid),paid=rows.filter(r=>r.paid);
+  const card=r=>`<div style="border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px;margin:8px 0"><div class="line" style="padding:2px 0"><strong>${esc(r.name)}${r.size?' · '+esc(r.size):''}</strong><strong style="color:${r.paid?'#067647':'#b42318'}">${r.paid?'Pagada':'Pendiente'}</strong></div><div class="muted" style="font-size:12px">${esc(r.who||'-')} · comprada el ${dateFmt(r.date)}</div>${r.pays.map(p=>`<div class="line" style="padding:3px 0;border-top:1px dashed #d0d5dd;margin-top:5px"><span class="muted">${repVerb(r,p)} ${dateFmt(p.date)}</span><strong>${esc(repComp(p))}</strong></div>`).join('')}</div>`;
+  const sec=(t,a)=>a.length?`<h3 style="margin:16px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.04em">${t} (${a.length})</h3>${a.map(card).join('')}`:'';
+  return receiptHTML('',`<div class="line"><span>Reporte</span><strong>${esc(title)}</strong></div><div class="line"><span>Fecha</span><strong>${dateFmt(Date.now())}</strong></div><div style="display:flex;gap:8px;margin:12px 0"><div style="flex:1;background:#e7f6ee;color:#067647;border-radius:10px;padding:8px 10px"><b style="font-size:20px">${paid.length}</b><br><small>pagadas</small></div><div style="flex:1;background:#fdecea;color:#b42318;border-radius:10px;padding:8px 10px"><b style="font-size:20px">${pend.length}</b><br><small>pendientes</small></div></div>${sec('Pendientes de pago',pend)}${sec('Pagadas',paid)}`,'','Estado de cuenta').replace('<div class="r-thanks">¡Gracias por preferirnos!</div>','');}
+async function salesReportPdf(title,rows){const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'});
+  let y=await pdfHeader(doc,'ESTADO DE CUENTA',['CHEMAS JC SPORT',title,'Reporte: '+dateFmt(Date.now())]);
+  const pend=rows.filter(r=>!r.paid),paid=rows.filter(r=>r.paid),out=[];
+  const add=(g,a)=>{if(!a.length)return;out.push({group:g,right:a.length+' camisa(s)'});a.forEach(r=>out.push({cells:[r.name+(r.size?' ('+r.size+')':''),r.who||'-',dateFmt(r.date),r.paid?'Pagada':'Pendiente',r.pays.length?r.pays.map(p=>repVerb(r,p)+' '+dateFmt(p.date)+' - '+repComp(p)).join('\n'):'-']}));};
+  add('Pendientes de pago',pend);add('Pagadas',paid);
+  pdfTable(doc,{y,cols:[{t:'Camisa',w:50,a:'left'},{t:'Cliente',w:34,a:'left'},{t:'Compra',w:22,a:'center'},{t:'Estado',w:22,a:'center'},{t:'Pago / comprobante',w:58,a:'left'}],rows:out});
+  pdfFooters(doc,'Chemas JC Sport');return doc.output('blob');}
+async function salesReport(){const q=($('#salesSearch')?.value||'').trim();
+  if(!q){notify('Escribe primero un nombre en el buscador (por ejemplo, Franco) y toca Reporte.');return;}
+  const rows=await salesReportData(q);if(!rows.length){notify('No hay ventas con esa búsqueda.');return;}
+  const title=q.replace(/(^|\s)(\p{L})/gu,(m,a,b)=>a+b.toUpperCase()),day=localDate(Date.now());
+  showReceipt(salesReportHTML(title,rows),'Estado-de-cuenta-'+day,{pdf:()=>salesReportPdf(title,rows),pdfName:'Estado-de-cuenta-'+title.replace(/\s+/g,'-')+'-'+day+'.pdf',title:'Estado de cuenta'});}
+document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('#salesReportBtn'))salesReport();});
 function orderPassesFilter(o,fl){const d=Number(o.createdAt)||0;if(d<fl.from||d>fl.to)return false;if(fl.q){const pz=ordPers(o),hay=norm([o.team,o.category,o.color,o.size,o.number,o.gender,o.status,o.customer,(window.ORD_CM||{})[o.customerId],pz.name,pz.patch,ordNotes(o)].filter(Boolean).join(' '));if(!fl.q.split(/\s+/).every(w=>hay.includes(w)))return false;}if(fl.st==='activos')return o.status!=='Cancelado'&&(fl.q?true:!(o.status==='Entregado'&&!o.saleId&&!o.customerId));if(fl.st==='todos')return true;return o.status===fl.st;}
 async function renderOrders(){
   const [os0,cs]=await Promise.all([all('orders'),all('customers')]);const cm=Object.fromEntries(cs.map(c=>[c.id,c.name]));window.ORD_CM=cm;const fl=orderFilters();const os=os0.filter(o=>orderPassesFilter(o,fl));
