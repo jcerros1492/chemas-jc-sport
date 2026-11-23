@@ -149,3 +149,10 @@ body.money-hidden .sob-amt{filter:blur(8px);user-select:none}
 .ctl-tot{display:flex;justify-content:space-between;align-items:center;background:#101827;color:#fff;border-radius:12px;padding:12px;margin-top:6px;font-size:13px}.ctl-tot small{display:block;opacity:.7;font-size:11px}.ctl-tot strong{font-size:16px}
 
 .adv-row{grid-template-columns:1fr 1fr}.adv-row input[name^=advRef]{grid-column:1/-1;min-height:44px}.adv-row .adv-del{grid-column:1/-1}
+
+/* v9.51: celulares iOS/Android */
+html,body{max-width:100%;overflow-x:hidden}
+.modal-backdrop{overscroll-behavior:contain}
+.modal,.modal-body,.modal-body .field,.modal-body input,.modal-body select,.modal-body textarea{max-width:100%;min-width:0}
+.modal-body input,.modal-body select,.modal-body textarea{font-size:16px;-webkit-text-size-adjust:100%}
+.modal-body{padding-bottom:max(20px,env(safe-area-inset-bottom))}

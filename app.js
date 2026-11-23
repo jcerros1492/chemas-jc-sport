@@ -861,3 +861,18 @@ async function initSync(){
 }
 async function init(){db=await openDB();bind();await render();const updateNet=()=>{if(syncCfg())return;const online=navigator.onLine;$('#onlineDot').style.background=online?'#34d399':'#fbbf24';$('#connectionText').textContent=online?'Local · Con conexión':'Sin conexión';};window.addEventListener('online',updateNet);window.addEventListener('offline',updateNet);updateNet();await initSync();bindOrderFilters();bindAccounts();bindPin();backfillPhotos();migrateNoClient();migrateCloseReceived();$('#viewDetail').onclick=()=>setProductView('detail');$('#viewStock').onclick=()=>setProductView('stock');setProductView(productView);if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});setupUpdates();}
 init().catch(err=>{console.error(err);document.querySelector('main').innerHTML='<div class="note warning">No se pudo iniciar la base de datos local. Abre esta aplicación desde un navegador moderno y, para habilitar el modo sin conexión, publícala mediante HTTPS o ejecútala desde localhost.</div>';});
+
+/* ---- Ventanas en celular (iOS/Android): ajustar al teclado y evitar que se corra de lado ---- */
+(function(){const root=document.getElementById('modalRoot');if(!root||root.dataset.fit)return;root.dataset.fit='1';
+  const vv=window.visualViewport;let locked=false,sy=0;
+  const lock=()=>{if(locked)return;locked=true;sy=window.scrollY||0;const b=document.body.style;b.position='fixed';b.top=(-sy)+'px';b.left='0';b.right='0';b.width='100%';};
+  const unlock=()=>{if(!locked)return;locked=false;const b=document.body.style;b.position='';b.top='';b.left='';b.right='';b.width='';window.scrollTo(0,sy);};
+  const fit=()=>{const bd=root.querySelector('.modal-backdrop');if(!bd)return;
+    if(vv){bd.style.left=vv.offsetLeft+'px';bd.style.top=vv.offsetTop+'px';bd.style.width=vv.width+'px';bd.style.height=vv.height+'px';bd.style.right='auto';bd.style.bottom='auto';
+      const m=bd.querySelector('.modal');if(m)m.style.maxHeight=Math.max(200,vv.height-28)+'px';}
+    if(window.scrollX)window.scrollTo(0,window.scrollY);};
+  new MutationObserver(()=>{if(root.querySelector('.modal-backdrop')){lock();fit();}else unlock();}).observe(root,{childList:true});
+  if(vv){vv.addEventListener('resize',fit);vv.addEventListener('scroll',fit);}
+  root.addEventListener('focusin',e=>{const t=e.target;if(!t||!/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName))return;
+    [150,350,600].forEach(ms=>setTimeout(()=>{fit();try{t.scrollIntoView({block:'center',inline:'nearest'});}catch(_){}if(window.scrollX)window.scrollTo(0,window.scrollY);},ms));});
+})();
