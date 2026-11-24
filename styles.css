@@ -156,3 +156,6 @@ html,body{max-width:100%;overflow-x:hidden}
 .modal,.modal-body,.modal-body .field,.modal-body input,.modal-body select,.modal-body textarea{max-width:100%;min-width:0}
 .modal-body input,.modal-body select,.modal-body textarea{font-size:16px;-webkit-text-size-adjust:100%}
 .modal-body{padding-bottom:max(20px,env(safe-area-inset-bottom))}
+
+/* v9.55: ningún campo con letra menor a 16px (evita el zoom automático de iPhone) */
+input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),select,textarea{font-size:16px!important}
